@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Event runtime data (generated screenshots/clips/sidecar JSONs per run)
+backend/events/event_*.jpg
+backend/events/event_*.mp4
+backend/events/event_*.json
+backend/events/events.jsonl
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db

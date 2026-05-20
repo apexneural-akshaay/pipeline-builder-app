@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sidebar-collapsed: 64px;
+    --sidebar-expanded: 256px;
+    --topbar-height: 56px;
+    --loop-nav-height: 48px;
+    --content-max-width: 1440px;
+
+    --radius-card: 12px;
+    --radius-button: 8px;
+    --radius-badge: 6px;
+    --radius-input: 8px;
+    --radius-modal: 16px;
+  }
+
+  :root,
+  .light {
+    --surface-0: #F8FAFC;
+    --surface-1: #FFFFFF;
+    --surface-2: #F1F5F9;
+    --surface-3: #E2E8F0;
+    --surface-4: #CBD5E1;
+
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #94A3B8;
+    --text-disabled: #CBD5E1;
+
+    --accent: #6366F1;
+    --accent-hover: #4F46E5;
+    --accent-muted: rgba(99, 102, 241, 0.10);
+
+    --success: #16A34A;
+    --success-muted: rgba(22, 163, 74, 0.08);
+    --success-border: rgba(22, 163, 74, 0.20);
+
+    --warning: #D97706;
+    --warning-muted: rgba(217, 119, 6, 0.08);
+    --warning-border: rgba(217, 119, 6, 0.20);
+
+    --error: #DC2626;
+    --error-muted: rgba(220, 38, 38, 0.06);
+    --error-border: rgba(220, 38, 38, 0.16);
+
+    --info: #2563EB;
+    --info-muted: rgba(37, 99, 235, 0.08);
+    --info-border: rgba(37, 99, 235, 0.16);
+
+    --stage-dataset: #6366F1;
+    --stage-train: #0D9488;
+    --stage-inference: #7C3AED;
+    --stage-output-review: #D97706;
+    --stage-retrain: #2563EB;
+    --stage-evaluation: #DB2777;
+    --stage-promotion: #16A34A;
+
+    --border-default: #E2E8F0;
+    --border-subtle: #F1F5F9;
+    --border-emphasis: #CBD5E1;
+    --border-accent: rgba(99, 102, 241, 0.24);
+
+    --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+    --shadow-dropdown: 0 8px 24px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.06);
+    --shadow-modal: 0 16px 48px rgba(15, 23, 42, 0.16), 0 4px 16px rgba(15, 23, 42, 0.08);
+  }
+
+  .dark {
+    --surface-0: #020617;
+    --surface-1: #0F172A;
+    --surface-2: #1E293B;
+    --surface-3: #334155;
+    --surface-4: #475569;
+
+    --text-primary: #F8FAFC;
+    --text-secondary: #CBD5E1;
+    --text-muted: #64748B;
+    --text-disabled: #334155;
+
+    --accent: #818CF8;
+    --accent-hover: #A5B4FC;
+    --accent-muted: rgba(129, 140, 248, 0.12);
+
+    --success: #4ADE80;
+    --warning: #FBBF24;
+    --error: #F87171;
+    --info: #60A5FA;
+
+    --stage-dataset: #A5B4FC;
+    --stage-train: #5EEAD4;
+    --stage-inference: #C4B5FD;
+    --stage-output-review: #FCD34D;
+    --stage-retrain: #93C5FD;
+    --stage-evaluation: #F9A8D4;
+    --stage-promotion: #86EFAC;
+
+    --border-default: #1E293B;
+    --border-subtle: #0F172A;
+    --border-emphasis: #334155;
+    --border-accent: rgba(129, 140, 248, 0.24);
+
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+    --shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  html {
+    background-color: var(--surface-0);
+    color: var(--text-primary);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--surface-0);
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-emphasis); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  * { scrollbar-width: thin; scrollbar-color: var(--border-emphasis) transparent; }
+
+  /* Hide scrollbars on the infinite canvas — panning is via drag, not scrollbars. */
+  .pipeline-canvas::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  .pipeline-canvas { scrollbar-width: none; -ms-overflow-style: none; }
+}
+
+@layer components {
+  .stage-bg-dataset       { background-color: rgba(99, 102, 241, 0.10);  color: var(--stage-dataset); }
+  .stage-bg-train         { background-color: rgba(13, 148, 136, 0.10);  color: var(--stage-train); }
+  .stage-bg-inference     { background-color: rgba(124, 58, 237, 0.10);  color: var(--stage-inference); }
+  .stage-bg-output-review { background-color: rgba(217, 119, 6, 0.10);   color: var(--stage-output-review); }
+  .stage-bg-retrain       { background-color: rgba(37, 99, 235, 0.10);   color: var(--stage-retrain); }
+  .stage-bg-evaluation    { background-color: rgba(219, 39, 119, 0.10);  color: var(--stage-evaluation); }
+  .stage-bg-promotion     { background-color: rgba(22, 163, 74, 0.10);   color: var(--stage-promotion); }
+}
