@@ -115,7 +115,7 @@ export interface ConfigField {
   /** Short help text shown below the label. */
   description?: string;
   placeholder?: string;
-  type: "text" | "number" | "slider" | "select" | "toggle" | "password" | "textarea" | "video_source" | "model_picker" | "class_picker";
+  type: "text" | "number" | "slider" | "select" | "toggle" | "password" | "textarea" | "video_source" | "model_picker" | "class_picker" | "rule_builder";
   required?: boolean;
   options?: string[];
   min?: number;

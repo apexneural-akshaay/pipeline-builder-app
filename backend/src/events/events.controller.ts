@@ -1,7 +1,17 @@
-import { Controller, Get, Param, Res, NotFoundException } from "@nestjs/common";
+import { Controller, Get, Headers, Param, Res, NotFoundException } from "@nestjs/common";
 import { Response } from "express";
 import * as fs from "fs";
 import * as path from "path";
+
+const MIME_TYPES: Record<string, string> = {
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".json": "application/json",
+};
 
 /* Reads events written by the generated pipeline runtime into ./events/events.jsonl.
    For the demo we serve from the backend folder, but in a real deploy each pipeline
@@ -52,13 +62,50 @@ export class EventsController {
   }
 
   @Get("file/:filename")
-  file(@Param("filename") filename: string, @Res() res: Response) {
+  file(
+    @Param("filename") filename: string,
+    @Headers("range") range: string | undefined,
+    @Res() res: Response,
+  ) {
     // basic path-traversal guard
     if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
       throw new NotFoundException();
     }
     const fp = path.join(EVENTS_DIR, filename);
     if (!fs.existsSync(fp)) throw new NotFoundException();
-    res.sendFile(fp);
+
+    const ext = path.extname(filename).toLowerCase();
+    const mime = MIME_TYPES[ext] ?? "application/octet-stream";
+    const stat = fs.statSync(fp);
+    const total = stat.size;
+
+    // Range request: browsers REQUIRE this to play HTML5 <video> from a URL.
+    // Without 206 Partial Content responses Chrome/Firefox refuse to start
+    // playback and show an empty player.
+    if (range && /^bytes=/.test(range)) {
+      const m = /bytes=(\d*)-(\d*)/.exec(range);
+      const start = m && m[1] ? parseInt(m[1], 10) : 0;
+      const end = m && m[2] ? parseInt(m[2], 10) : total - 1;
+      if (Number.isNaN(start) || Number.isNaN(end) || start > end || end >= total) {
+        res.status(416).setHeader("Content-Range", `bytes */${total}`).end();
+        return;
+      }
+      const chunkSize = end - start + 1;
+      res.status(206);
+      res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Content-Length", String(chunkSize));
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Cache-Control", "no-cache");
+      fs.createReadStream(fp, { start, end }).pipe(res);
+      return;
+    }
+
+    res.status(200);
+    res.setHeader("Content-Length", String(total));
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "no-cache");
+    fs.createReadStream(fp).pipe(res);
   }
 }

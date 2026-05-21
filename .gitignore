@@ -1,16 +1,66 @@
 # Dependencies
 node_modules/
+**/node_modules/
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# YOLO / ML models & weights
+*.pt
+*.onnx
+*.engine
+*.weights
+*.pth
+*.ckpt
+*.safetensors
+*.tflite
+*.pb
+*.h5
+backend/models/
+backend/runs/
+backend/uploads/
+backend/runtime/
+
+# Images / video / media
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.webp
+*.tiff
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
 
 # Event runtime data (generated screenshots/clips/sidecar JSONs per run)
 backend/events/event_*.jpg
 backend/events/event_*.mp4
 backend/events/event_*.json
 backend/events/events.jsonl
+backend/events/
 
 # Env / secrets
 .env
 .env.local
 .env.*.local
+
+# Logs
+*.log
+logs/
 
 # OS
 .DS_Store

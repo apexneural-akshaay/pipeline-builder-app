@@ -2,12 +2,15 @@ import { Body, Controller, Get, Param, Post, Res, BadRequestException } from "@n
 import { Response } from "express";
 import { RuntimeService, NodeTestRequest } from "./runtime.service";
 import { AssemblerService, PipelineJson } from "../pipelines/assembler.service";
+import { DownloadsService } from "../models/downloads.service";
+import { findVariant, remapSize } from "../../../shared/yolo-catalog";
 
 @Controller()
 export class RuntimeController {
   constructor(
     private readonly runtime: RuntimeService,
     private readonly assembler: AssemblerService,
+    private readonly downloads: DownloadsService,
   ) {}
 
   // ─── Per-node tester ─────────────────────────────────────
@@ -18,9 +21,57 @@ export class RuntimeController {
 
   // ─── Full pipeline runner ────────────────────────────────
   @Post("pipelines/run")
-  startPipeline(@Body() pipeline: PipelineJson) {
+  async startPipeline(@Body() pipeline: PipelineJson) {
+    // Pre-download any yolo_model weights that are missing on disk. This keeps
+    // .pt files in backend/models/ (where /models can see them and reuse them
+    // for future runs) instead of letting Ultralytics dump them into the
+    // per-run cwd, where they'd be re-downloaded every time.
+    await this.ensureWeights(pipeline);
     const code = this.assembler.compile(pipeline);
     return this.runtime.startPipeline(code);
+  }
+
+  /** Walk yolo_model nodes, kick off downloads for any whose .pt isn't on disk,
+   *  and wait for each to finish (or fail). Errors are reported back as HTTP. */
+  private async ensureWeights(pipeline: PipelineJson): Promise<void> {
+    if (!pipeline?.nodes) return;
+    const needed = new Set<string>();
+    for (const n of pipeline.nodes) {
+      if (n.type !== "yolo_model") continue;
+      const cfg = n.config || {};
+      // Explicit weights override → trust the user
+      if (typeof cfg.weights === "string" && cfg.weights.trim()) continue;
+      const version = String(cfg.version ?? "yolo26").toLowerCase();
+      const task = String(cfg.task ?? "detect").toLowerCase();
+      let size = String(cfg.size ?? "n").toLowerCase();
+      let v = findVariant(version, task, size);
+      if (!v) {
+        size = remapSize(version, size);
+        v = findVariant(version, task, size);
+      }
+      if (v && v.downloadable) needed.add(v.filename);
+    }
+
+    for (const fname of needed) {
+      try {
+        await this.downloadAndWait(fname);
+      } catch (e: any) {
+        throw new BadRequestException(`Failed to fetch weights ${fname}: ${e?.message ?? e}`);
+      }
+    }
+  }
+
+  private downloadAndWait(filename: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const job = this.downloads.start(filename);
+      if (job.status === "done") return resolve();
+      if (job.status === "error") return reject(new Error(job.error || "unknown"));
+      const unsub = this.downloads.subscribe((j) => {
+        if (j.filename !== filename) return;
+        if (j.status === "done") { unsub(); resolve(); }
+        else if (j.status === "error") { unsub(); reject(new Error(j.error || "download failed")); }
+      });
+    });
   }
 
   @Post("pipelines/runs/:id/stop")

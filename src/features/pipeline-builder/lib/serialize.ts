@@ -18,6 +18,8 @@ export interface ExportedPipeline {
 
 const COMMA_SEPARATED_KEYS = new Set(["classes"]);
 const BOOLEAN_KEYS = new Set(["save_screenshot", "save_clip", "tracking"]);
+/** Keys whose value is a JSON-encoded object (e.g. condition rule builder). */
+const JSON_OBJECT_KEYS = new Set(["rules"]);
 
 function coerceConfig(raw: Record<string, string> | undefined): Record<string, any> {
   if (!raw) return {};
@@ -32,6 +34,11 @@ function coerceConfig(raw: Record<string, string> | undefined): Record<string, a
 
     if (COMMA_SEPARATED_KEYS.has(k)) {
       out[k] = String(v).split(",").map((x) => x.trim()).filter(Boolean);
+      continue;
+    }
+
+    if (JSON_OBJECT_KEYS.has(k)) {
+      try { out[k] = JSON.parse(String(v)); } catch { /* skip bad JSON */ }
       continue;
     }
 

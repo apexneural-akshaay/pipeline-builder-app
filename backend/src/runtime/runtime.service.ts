@@ -54,7 +54,7 @@ function resolvePython(): string {
   return "python";
 }
 
-const PYTHON_CMD = resolvePython();
+export const PYTHON_CMD = resolvePython();
 
 export interface NodeTestRequest {
   nodeType: string;

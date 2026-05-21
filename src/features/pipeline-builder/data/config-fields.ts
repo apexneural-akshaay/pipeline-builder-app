@@ -17,8 +17,7 @@ export const CONFIG_FIELDS: Record<string, ConfigField[]> = {
   ],
 
   condition: [
-    { key: "classes",        label: "Classes that trigger event", description: "Pick from the upstream model's class list. Blank = any class triggers.", type: "class_picker" },
-    { key: "min_confidence", label: "Minimum confidence",         description: "Detections below this don't trigger.", placeholder: "0.7", type: "slider", min: 0, max: 1, step: 0.05, required: true },
+    { key: "rules", label: "Trigger rules", description: "Combine rules with AND/OR. Empty = trigger on any detection from the model.", type: "rule_builder" },
   ],
 
   event_sink: [

@@ -51,6 +51,36 @@ export function ExpandedNode({
 
   const fields = getConfigFields(node.type);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  /** Walk edges backwards from `nodeId` until we find a yolo_model node, or
+   *  bail after a depth limit. Returns its config or undefined.
+   *
+   *  This lets the condition block's class dropdown show ONLY the classes
+   *  the upstream model is actually emitting (i.e. the classes the user
+   *  selected in the model block) — not every class the model knows about. */
+  function findUpstreamModelConfig(nodeId: string, depth = 0): Record<string, any> | undefined {
+    if (depth > 6) return undefined;
+    const incoming = edges.find((e) => e.target === nodeId);
+    if (!incoming) return undefined;
+    const parent = allNodes.find((n) => n.id === incoming.source);
+    if (!parent) return undefined;
+    if (parent.type === "yolo_model") return parent.config as Record<string, any>;
+    return findUpstreamModelConfig(parent.id, depth + 1);
+  }
+
+  // Augment the config we pass to ConfigFieldRenderer with upstream-model info,
+  // so widgets like the RuleBuilder can restrict their class dropdown.
+  const upstreamModelCfg = findUpstreamModelConfig(node.id);
+  const enrichedAllValues = {
+    ...(node.config as Record<string, string>),
+    ...(upstreamModelCfg
+      ? {
+          _upstream_filename: String(upstreamModelCfg.filename ?? ""),
+          _upstream_classes: String(upstreamModelCfg.classes ?? ""), // comma-sep list as stored
+          _upstream_task: String(upstreamModelCfg.task ?? ""),
+        }
+      : {}),
+  };
   const [renaming, setRenaming] = useState(false);
   const [pickerOpenFor, setPickerOpenFor] = useState<number | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -297,7 +327,7 @@ export function ExpandedNode({
                     field={f}
                     value={node.config[f.key] ?? ""}
                     onChange={(v) => onConfigChange(f.key, v)}
-                    allValues={node.config as Record<string, string>}
+                    allValues={enrichedAllValues}
                     onMultiChange={(patch) => {
                       for (const [k, v] of Object.entries(patch)) onConfigChange(k, v);
                     }}
@@ -331,7 +361,7 @@ export function ExpandedNode({
                     field={f}
                     value={node.config[f.key] ?? ""}
                     onChange={(v) => onConfigChange(f.key, v)}
-                    allValues={node.config as Record<string, string>}
+                    allValues={enrichedAllValues}
                     onMultiChange={(patch) => {
                       for (const [k, v] of Object.entries(patch)) onConfigChange(k, v);
                     }}

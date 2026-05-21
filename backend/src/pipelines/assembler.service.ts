@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
 import * as fs from "fs";
 import * as path from "path";
+import { resolveFilename } from "../../../shared/yolo-catalog";
 
 export interface PipelineNode {
   id: string;
@@ -172,8 +173,12 @@ export class AssemblerService {
     }
 
     if (node.type === "condition") {
-      ctx.classes = Array.isArray(node.config.classes) ? node.config.classes : [];
-      ctx.min_confidence = node.config.min_confidence ?? 0.5;
+      // Rules are a structured object — pass the JSON string straight through.
+      // The snippet wraps it in a triple-quoted string and json.loads() it.
+      // Escape any triple-quote sequences just in case (shouldn't happen with JSON).
+      const rules = node.config.rules ?? { combinator: "AND", rules: [] };
+      const json = JSON.stringify(rules).replace(/"""/g, '\\"\\"\\"');
+      ctx.rules = json;
     }
 
     if (node.type === "video_input") {
@@ -186,14 +191,33 @@ export class AssemblerService {
 
   /**
    * Map { version, task, size } to a YOLO weights filename.
-   * version: "yolov5" | "yolov6" | "yolov7" | "yolov8" | "yolov9" | "yolov10" | "yolo11" | "yolo12" | "yolo26"
-   * task:    "detect" | "segment" | "classify" | "pose" | "obb"
-   * size:    "n" | "s" | "m" | "l" | "x" (some versions use different letters; we keep it simple)
+   *
+   * Resolution order:
+   *   1. If cfg.weights is set explicitly (user-provided path or filename), use it.
+   *   2. Look up (version, task, size) in the shared catalog — handles every
+   *      family-specific irregularity (v9 t/c/e, v10 b, v3 tiny/spp, v5 'u' suffix,
+   *      v11/12/26 dropping the 'v', etc.).
+   *   3. Fall back to string concat (`${version}${size}${suffix}.pt`) for unknown
+   *      combinations — covers custom user uploads.
+   *
+   * After resolving the filename, prefer a local copy in backend/models/ (returns
+   * an absolute Windows-safe path). Otherwise return the bare filename so
+   * Ultralytics auto-downloads it on first use.
    */
   resolveWeights(cfg: Record<string, any>): string {
+    // Explicit override wins.
+    if (typeof cfg.weights === "string" && cfg.weights.trim()) {
+      return this.localizeIfPresent(cfg.weights.trim());
+    }
+
     const version = String(cfg.version ?? "yolo26").toLowerCase();
     const size = String(cfg.size ?? "n").toLowerCase();
     const task = String(cfg.task ?? "detect").toLowerCase();
+
+    const fromCatalog = resolveFilename(version, task, size);
+    if (fromCatalog) return this.localizeIfPresent(fromCatalog);
+
+    // Defensive fallback: same naming the picker used to assume.
     const taskSuffix: Record<string, string> = {
       detect: "",
       segment: "-seg",
@@ -201,16 +225,16 @@ export class AssemblerService {
       pose: "-pose",
       obb: "-obb",
     };
-    const suffix = taskSuffix[task] ?? "";
-    const filename = `${version}${size}${suffix}.pt`;
-    // Prefer the locally-bundled weight in backend/models/. Resolve to absolute path so
-    // the generated inference.py works from any cwd. Fall back to the bare name so
-    // Ultralytics auto-downloads if the file isn't there.
+    const filename = `${version}${size}${taskSuffix[task] ?? ""}.pt`;
+    return this.localizeIfPresent(filename);
+  }
+
+  /** If the file exists in backend/models/, return its absolute (forward-slashed) path. */
+  private localizeIfPresent(filename: string): string {
+    // Already an absolute path? Return as-is (normalized).
+    if (path.isAbsolute(filename)) return filename.replace(/\\/g, "/");
     const localPath = path.resolve(__dirname, "..", "..", "models", filename);
-    if (fs.existsSync(localPath)) {
-      // Use forward slashes so the Python string literal is portable on Windows
-      return localPath.replace(/\\/g, "/");
-    }
+    if (fs.existsSync(localPath)) return localPath.replace(/\\/g, "/");
     return filename;
   }
 
@@ -249,13 +273,18 @@ export class AssemblerService {
   }
 
   private loadSnippet(type: string): ParsedSnippet {
-    if (this.snippetCache.has(type)) return this.snippetCache.get(type)!;
     const file = path.join(SNIPPET_DIR, `${type}.py`);
     if (!fs.existsSync(file))
       throw new BadRequestException(`No snippet for block type: ${type}`);
+    // Use mtime as cache key so edits to snippet .py files are picked up
+    // without restarting the backend (ts-node-dev only watches .ts files).
+    const mtime = fs.statSync(file).mtimeMs;
+    const cacheKey = `${type}:${mtime}`;
+    const cached = this.snippetCache.get(cacheKey);
+    if (cached) return cached;
     const raw = fs.readFileSync(file, "utf8");
     const parsed = this.parseSections(raw);
-    this.snippetCache.set(type, parsed);
+    this.snippetCache.set(cacheKey, parsed);
     return parsed;
   }
 
@@ -300,6 +329,7 @@ export class AssemblerService {
     "classes", "fps", "confidence", "min_confidence",
     "save_screenshot", "save_clip", "tracking",
     "clip_seconds", "clip_fps", "cooldown_seconds",
+    "rules", // JSON string passed as-is into a Python triple-quoted literal
   ]);
 
   private substitute(text: string, ctx: Record<string, any>): string {

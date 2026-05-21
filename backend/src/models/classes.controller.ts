@@ -1,47 +1,76 @@
 import { Controller, Get, Query, BadRequestException } from "@nestjs/common";
+import {
+  DatasetInfo,
+  datasetForFilename,
+  defaultDatasetForTask,
+  findVariant,
+} from "../../../shared/yolo-catalog";
 
-/** 80 COCO classes used by YOLO detect / segment / pose models. */
-const COCO_CLASSES = [
-  "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat","traffic light",
-  "fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow",
-  "elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee",
-  "skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle",
-  "wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange",
-  "broccoli","carrot","hot dog","pizza","donut","cake","chair","couch","potted plant","bed",
-  "dining table","toilet","tv","laptop","mouse","remote","keyboard","cell phone","microwave","oven",
-  "toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush",
-];
-
-/** 15 DOTAv1 classes used by YOLO OBB models (aerial / satellite imagery). */
-const DOTAV1_CLASSES = [
-  "plane","ship","storage tank","baseball diamond","tennis court","basketball court",
-  "ground track field","harbor","bridge","large vehicle","small vehicle",
-  "helicopter","roundabout","soccer ball field","swimming pool",
-];
-
-/** Top-level groupings the frontend uses to render the picker. */
+/**
+ * GET /models/classes — returns the class list a YOLO model emits.
+ *
+ * Resolution order:
+ *   1. ?filename=yolov8s-obb.pt        → look up that exact variant in the catalog,
+ *                                        return its training dataset.
+ *   2. ?family=yolo11&task=detect&size=n → look up the (family, task, size) variant.
+ *   3. ?task=detect                    → fall back to the default dataset for that task.
+ *
+ * Response:
+ *   { task, source, class_count, classes, is_freeform? }
+ *
+ * `is_freeform: true` means the class list is too long to enumerate (e.g.
+ * ImageNet-1k) — the picker should switch to a text input.
+ */
 @Controller("models/classes")
 export class ClassesController {
-  /** GET /models/classes?task=detect → returns the class list YOLO would emit for that task. */
   @Get()
-  list(@Query("task") task?: string) {
+  list(
+    @Query("task") task?: string,
+    @Query("family") family?: string,
+    @Query("size") size?: string,
+    @Query("filename") filename?: string,
+  ) {
+    if (filename) {
+      const ds = datasetForFilename(filename);
+      if (!ds) {
+        throw new BadRequestException(`Unknown filename: ${filename}`);
+      }
+      return shape(task ?? "?", ds);
+    }
+
+    if (family && task && size) {
+      const v = findVariant(family, task, size);
+      if (!v) {
+        throw new BadRequestException(
+          `No catalog variant for family=${family} task=${task} size=${size}`,
+        );
+      }
+      // Find the dataset by walking back into the catalog.
+      const ds = datasetForFilename(v.filename);
+      if (!ds) {
+        throw new BadRequestException(
+          `Variant ${v.filename} has no associated dataset`,
+        );
+      }
+      return shape(task, ds);
+    }
+
     const t = (task ?? "detect").toLowerCase();
-
-    // Detect / segment / pose share COCO
-    if (t === "detect" || t === "segment" || t === "pose") {
-      return { task: t, source: "COCO", classes: COCO_CLASSES };
+    const ds = defaultDatasetForTask(t);
+    if (!ds) {
+      throw new BadRequestException(`Unknown task: ${task}`);
     }
-
-    if (t === "obb") {
-      return { task: t, source: "DOTAv1", classes: DOTAV1_CLASSES };
-    }
-
-    if (t === "classify") {
-      // Classification uses 1000 ImageNet classes — too long for a dropdown.
-      // The picker will fall back to a freeform text input for this task.
-      return { task: t, source: "ImageNet-1k", classes: [] };
-    }
-
-    throw new BadRequestException(`Unknown task: ${task}`);
+    return shape(t, ds);
   }
+}
+
+function shape(task: string, ds: DatasetInfo) {
+  return {
+    task,
+    source: ds.id,
+    label: ds.label,
+    class_count: ds.class_count,
+    classes: ds.classes,
+    is_freeform: ds.is_freeform ?? false,
+  };
 }

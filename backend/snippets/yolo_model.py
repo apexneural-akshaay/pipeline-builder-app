@@ -140,8 +140,14 @@ state["{{node_id}}"] = {
     "fps": src.get("fps"),     # carry input FPS forward so downstream can size buffers
     "width": src.get("width"),
     "height": src.get("height"),
+    # Forward video-source metadata so event_sink can ffmpeg-clip the original file.
+    "source": src.get("source"),
+    "source_is_file": src.get("source_is_file", False),
+    "video_time": src.get("video_time", 0.0),
+    "native_fps": src.get("native_fps", 0.0),
 }
 _inferred_{{node_id}} += 1
-if _time_{{node_id}}.time() - _last_hb_y_{{node_id}} >= 1.0:
+# Always emit on the very first frame (proof of life) and then once per second.
+if _inferred_{{node_id}} == 1 or _time_{{node_id}}.time() - _last_hb_y_{{node_id}} >= 1.0:
     print(f"@HB {{node_id_raw}} frames={_inferred_{{node_id}}} detections={len(dets_{{node_id}})}", flush=True)
     _last_hb_y_{{node_id}} = _time_{{node_id}}.time()

@@ -1,15 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+export type DownloadStatus =
+  | "installed"
+  | "downloadable"
+  | "queued"
+  | "downloading"
+  | "done"
+  | "error"
+  | "unavailable";
+
+export interface ModelSize {
+  size: string;
+  label: string;
+  filename: string;
+  available: boolean;
+  downloadable: boolean;
+  download_status: DownloadStatus;
+  download_error?: string;
+  input_size?: number;
+  params_m?: number;
+  flops_b?: number;
+  map?: number;
+  speed_cpu_ms?: number;
+  speed_gpu_ms?: number;
+  notes?: string;
+}
 export interface ModelTask {
   id: string;
   label: string;
-  sizes: { size: string; filename: string; available: boolean }[];
+  dataset: string;
+  sizes: ModelSize[];
 }
 export interface ModelVersion {
   id: string;
   label: string;
+  status?: string;
+  license?: string;
+  description?: string;
+  nms_free?: boolean;
   tasks: ModelTask[];
 }
 
@@ -17,30 +47,29 @@ const BACKEND =
   (typeof process !== "undefined" && (process as any).env?.NEXT_PUBLIC_BACKEND_URL) ||
   "http://localhost:4001";
 
-let cache: ModelVersion[] | null = null;
-let pending: Promise<ModelVersion[]> | null = null;
-
 async function fetchModels(): Promise<ModelVersion[]> {
-  if (cache) return cache;
-  if (pending) return pending;
-  pending = fetch(`${BACKEND}/models`)
-    .then((r) => r.json())
-    .then((d) => {
-      cache = d.versions || [];
-      return cache!;
-    })
-    .catch(() => {
-      cache = [];
-      return cache!;
-    });
-  const out = await pending;
-  pending = null;
-  return out;
+  try {
+    const r = await fetch(`${BACKEND}/models`);
+    const d = await r.json();
+    return d.versions || [];
+  } catch {
+    return [];
+  }
 }
 
+/**
+ * Live model catalog. Re-fetches when refresh() is called — needed so the picker
+ * picks up download_status transitions (downloading → done) without a full reload.
+ */
 export function useModels() {
-  const [versions, setVersions] = useState<ModelVersion[]>(cache ?? []);
-  const [loading, setLoading] = useState(!cache);
+  const [versions, setVersions] = useState<ModelVersion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    const v = await fetchModels();
+    setVersions(v);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -53,5 +82,5 @@ export function useModels() {
     return () => { live = false; };
   }, []);
 
-  return { versions, loading };
+  return { versions, loading, refresh };
 }
